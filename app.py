@@ -1,65 +1,66 @@
-from flask import Flask, render_template, request
-import pickle
-import numpy as np
+from flask import Flask, render_template, request, jsonify
+from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-import tensorflow as tf
-import re
+import numpy as np
+import pickle
 
-app = Flask(__name__, template_folder='templates')
+app = Flask(__name__)
 
-model = tf.keras.models.load_model('text_generation_model.keras')
-with open("tokenizer.pkl", 'rb') as file:
-    tokenizer = pickle.load(file)
+# Load the saved model and tokenizer
+model = load_model("text_generation_model.keras")
+
+# Load tokenizer
+with open("tokenizer.pkl", "rb") as f:
+    tokenizer = pickle.load(f)
+
+# Define max_sequence_len (same as during model training)
+max_sequence_len = 100
 
 
 @app.route('/')
-def home():
+def index():
     return render_template('index.html')
 
 
-# Autocompletations function
-def autoCompletations(text, model):
-    # Tokenization and Text vectorization
-    text_sequences = np.array(tokenizer.texts_to_sequences([text]))
-    # Pre-padding
-    testing = pad_sequences(text_sequences, maxlen=53, padding='pre')
-    # Prediction
-    y_pred_test = np.argmax(model.predict(testing, verbose=0))
-
-    predicted_word = ''
-    for word, index in tokenizer.word_index.items():
-        if index == y_pred_test:
-            predicted_word = word
-            break
-    text += " " + predicted_word + '.'
-    return text
-
-
-# Generate text function
-def generate_text(text, new_words):
-    for _ in range(new_words):
-        text = autoCompletations(text, model)[:-1]
-    return text
-
-
-@app.route('/generate', methods=['GET', 'POST'])
+@app.route('/generate', methods=['POST'])
 def generate():
-    # If a form is submitted
-    if request.method == "POST":
+    seed_text = request.form.get('prompt')
+    next_words = int(request.form.get('next_words', 2))
 
-        # Get values through input bars
-        text = request.form.get("Text")
-        no_of_words = request.form.get("NoOfWords")
+    for _ in range(next_words):
+        token_list = tokenizer.texts_to_sequences([seed_text])[0]
+        token_list = pad_sequences([token_list], maxlen=max_sequence_len - 1, padding='pre')
 
-        # Get prediction from the generate_text function written above
-        generated_text = autoCompletations(text, model)
+        predictions = model.predict(token_list, verbose=0)
+        predicted = np.argmax(predictions, axis=-1)[0]
 
-    else:
-        generated_text = ""
+        output_word = ""
+        for word, index in tokenizer.word_index.items():
+            if index == predicted:
+                output_word = word
+                break
 
-    return render_template("generate.html", output=generated_text)
+        seed_text += " " + output_word
+
+    return jsonify({"generated_text": seed_text})
 
 
-# Running the app
-if __name__ == "__main__":
+@app.route('/suggest', methods=['GET'])
+def suggest():
+    query = request.args.get('q', '')
+
+    if not query:
+        return jsonify([])
+
+    # Generate sentence suggestions based on partial input
+    suggestions = []
+
+    for word in tokenizer.word_index.keys():
+        if word.startswith(query.lower()):
+            suggestions.append(word)
+
+    return jsonify(suggestions[:10])
+
+
+if __name__ == '__main__':
     app.run(debug=True)
