@@ -4,31 +4,55 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <title>Text Generator with Auto-Suggest</title>
+    <title>Text Generation</title>
 </head>
 <body>
     <div class="container">
         <h1>What can I help with?</h1>
+
         <form id="text-form">
-            <div class="input-wrapper">
-                <input
-                    type="text"
-                    id="prompt"
-                    name="prompt"
-                    placeholder="Ask anything"
-                    autocomplete="off"
-                    list="suggestions"
-                    oninput="getSuggestions(this.value)"
-                    required
-                >
-                <datalist id="suggestions"></datalist>
-                <button type="submit">▶</button>
-            </div>
+            <input type="text" id="prompt" name="prompt" placeholder="Ask anything" autocomplete="off" required>
+            <input type="number" id="num-results" name="num_results" value="3" min="1" max="10" placeholder="Results">
+            <input type="number" id="next-words" name="next_words" value="10" min="1" placeholder="Words">
+            <button type="submit">▶</button>
         </form>
 
         <div id="output"></div>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        const form = document.getElementById('text-form');
+        const output = document.getElementById('output');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const prompt = document.getElementById('prompt').value;
+            const numResults = document.getElementById('num-results').value || 3;
+            const nextWords = document.getElementById('next-words').value || 10;
+
+            const formData = new FormData();
+            formData.append('prompt', prompt);
+            formData.append('num_results', numResults);
+            formData.append('next_words', nextWords);
+
+            const response = await fetch('/generate', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            // Clear previous output
+            output.innerHTML = "<h2>Generated Texts:</h2>";
+
+            result.generated_texts.forEach((text, index) => {
+                const div = document.createElement('div');
+                div.classList.add('result');
+                div.innerHTML = `<strong>Result ${index + 1}:</strong> <p>${text}</p>`;
+                output.appendChild(div);
+            });
+        });
+    </script>
 </body>
 </html>

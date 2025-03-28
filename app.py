@@ -6,10 +6,10 @@ import pickle
 
 app = Flask(__name__)
 
-# Load the saved model and tokenizer
+# Load your saved model
 model = load_model("text_generation_model.keras")
 
-# Load tokenizer
+# Load the tokenizer
 with open("tokenizer.pkl", "rb") as f:
     tokenizer = pickle.load(f)
 
@@ -25,41 +25,31 @@ def index():
 @app.route('/generate', methods=['POST'])
 def generate():
     seed_text = request.form.get('prompt')
-    next_words = int(request.form.get('next_words', 2))
+    next_words = int(request.form.get('next_words', 10))  # Default to 10 words
+    num_results = int(request.form.get('num_results', 3))  # Generate 3 results by default
 
-    for _ in range(next_words):
-        token_list = tokenizer.texts_to_sequences([seed_text])[0]
-        token_list = pad_sequences([token_list], maxlen=max_sequence_len - 1, padding='pre')
+    results = []
 
-        predictions = model.predict(token_list, verbose=0)
-        predicted = np.argmax(predictions, axis=-1)[0]
+    for _ in range(num_results):
+        current_text = seed_text
+        for _ in range(next_words):
+            token_list = tokenizer.texts_to_sequences([current_text])[0]
+            token_list = pad_sequences([token_list], maxlen=max_sequence_len - 1, padding='pre')
 
-        output_word = ""
-        for word, index in tokenizer.word_index.items():
-            if index == predicted:
-                output_word = word
-                break
+            predictions = model.predict(token_list, verbose=0)
+            predicted = np.argmax(predictions, axis=-1)[0]
 
-        seed_text += " " + output_word
+            output_word = ""
+            for word, index in tokenizer.word_index.items():
+                if index == predicted:
+                    output_word = word
+                    break
 
-    return jsonify({"generated_text": seed_text})
+            current_text += " " + output_word
 
+        results.append(current_text)
 
-@app.route('/suggest', methods=['GET'])
-def suggest():
-    query = request.args.get('q', '')
-
-    if not query:
-        return jsonify([])
-
-    # Generate sentence suggestions based on partial input
-    suggestions = []
-
-    for word in tokenizer.word_index.keys():
-        if word.startswith(query.lower()):
-            suggestions.append(word)
-
-    return jsonify(suggestions[:10])
+    return jsonify({"generated_texts": results})
 
 
 if __name__ == '__main__':
