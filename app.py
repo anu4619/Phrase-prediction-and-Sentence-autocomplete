@@ -7,7 +7,7 @@ import re
 
 app = Flask(__name__, template_folder='templates')
 
-model = tf.keras.models.load_model('sentence_completion.h5')
+model = tf.keras.models.load_model('text_generation_model.keras')
 with open("tokenizer.pkl", 'rb') as file:
     tokenizer = pickle.load(file)
 
